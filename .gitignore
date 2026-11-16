@@ -15,8 +15,9 @@ coverage
 *.local
 
 # Editor directories and files
-.vscode/*
-!.vscode/extensions.json
+**/.vscode/*
+!**/.vscode/extensions.json
+.claude/
 .idea
 *.suo
 *.ntvs*
@@ -41,3 +42,12 @@ __screenshots__/
 # Env
 .env
 .env.*
+!.env.example
+
+# Rust
+target/
+
+# Android
+.gradle/
+local.properties
+*.apk

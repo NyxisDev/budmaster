@@ -1,0 +1,154 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/manrope';
+@import 'tailwindcss';
+
+/* Outfit потрібен лише для напису в логотипі (тільки латиниця). */
+@font-face {
+  font-family: 'Outfit Logo';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/outfit-latin-700.woff2') format('woff2');
+}
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Палитра взята из логотипов Budmaster:
+ *   оранжевый #FF8A00 — знак и «master», тёмно-синий #0B1121 — «Bud» на светлом фоне,
+ *   белый — «Bud» на тёмном фоне.
+ * На оранжевом текст всегда тёмно-синий: белый на #FF8A00 не проходит по контрасту.
+ */
+:root {
+  --radius: 0.625rem;
+
+  --background: #f8fafc;
+  --foreground: #0b1121;
+  --card: #ffffff;
+  --card-foreground: #0b1121;
+  --popover: #ffffff;
+  --popover-foreground: #0b1121;
+  --primary: #ff8a00;
+  --primary-foreground: #0b1121;
+  --secondary: #eef2f7;
+  --secondary-foreground: #0b1121;
+  --muted: #eef2f7;
+  --muted-foreground: #516079;
+  --accent: #fff1de;
+  --accent-foreground: #0b1121;
+  --destructive: #c62828;
+  --border: #dbe2ec;
+  --input: #7d8a9e; /* рамка полів: контраст із фоном не менше 3:1 */
+  --ring: #ff8a00;
+  --focus: #0b1121;
+
+  --brand-text: #a85600; /* помаранчевий для тексту на світлому фоні, контраст не менше 4.5:1 */
+  --success: #17803d;
+  --warning: #9a5b00;
+}
+
+.dark {
+  --background: #0b1121;
+  --foreground: #f8fafc;
+  --card: #151d30;
+  --card-foreground: #f8fafc;
+  --popover: #151d30;
+  --popover-foreground: #f8fafc;
+  --primary: #ff8a00;
+  --primary-foreground: #0b1121;
+  --secondary: #1e2941;
+  --secondary-foreground: #f8fafc;
+  --muted: #1e2941;
+  --muted-foreground: #a3b1c6;
+  --accent: #2a3550;
+  --accent-foreground: #f8fafc;
+  --destructive: #ff6b6b;
+  --border: #283350;
+  --input: #5b6b8f;
+  --ring: #ff8a00;
+  --focus: #ff8a00;
+
+  --brand-text: #ff8a00;
+  --success: #4ade80;
+  --warning: #fbbf24;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-brand: var(--brand-text);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: 'Inter Variable', system-ui, sans-serif;
+  /* Outfit із логотипа не має кирилиці, тому заголовки набрано схожим геометричним Manrope. */
+  --font-heading: 'Manrope Variable', 'Inter Variable', system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-heading tracking-tight;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Видимий фокус з клавіатури для всіх елементів. Правило поза шарами, тому сильніше за
+   outline-none у готових компонентах. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@utility container-page {
+  @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
+}

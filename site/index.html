@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Budmaster — будівельні матеріали в Чугуєві: цемент, пиломатеріали, покрівля, водостічні системи Rainway, кріплення. Каталог із цінами, заявка онлайн.">
+    <meta name="theme-color" content="#0b1121">
+    <title>Budmaster — будівельні матеріали в Чугуєві</title>
+    <!-- Тема ставиться до першого малювання сторінки, щоб не було спалаху світлого фону. -->
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('budmaster-theme');
+          var dark = saved === 'dark' || ((!saved || saved === 'auto') && matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-11314656120"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'AW-11314656120');
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

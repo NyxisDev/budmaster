@@ -1,38 +1,28 @@
-# budmaster
+# Budmaster
 
-This template should help get you started developing with Vue 3 in Vite.
+Система обліку будматеріалів і публічний сайт-каталог.
 
-## Recommended IDE Setup
+| Папка | Що всередині | Стан |
+|-------|--------------|------|
+| `site/` | Публічний сайт: Vue 3, Vite, Tailwind CSS, shadcn-vue | каталог працює на демонстраційних даних |
+| `backend/` | Сервер: Rust, Axum, SQLx, PostgreSQL | ще не розпочато |
+| `android/` | Застосунок обліку: Java, Room | ще не розпочато |
+| `docs/` | Проєкт системи: [design.md](docs/design.md) | узгоджено |
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
-
-## Recommended Browser Setup
-
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
+## Сайт
 
 ```sh
+cd site
 npm install
-```
-
-### Compile and Hot-Reload for Development
-
-```sh
 npm run dev
 ```
 
-### Compile and Minify for Production
+Збірка: `npm run build`, результат у `site/dist`.
 
-```sh
-npm run build
+Поки сервера немає, сайт бере товари з `site/src/api/mock`. Щоб перейти на справжній сервер,
+задайте в `site/.env`:
+
+```
+VITE_USE_MOCKS=false
+VITE_API_URL=https://адреса-сервера
 ```

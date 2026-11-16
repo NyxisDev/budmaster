@@ -1,0 +1,14 @@
+# Сайт лежить у /site. Netlify збирає його звідси.
+[build]
+  base = "site"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Vue Router у режимі history: усі адреси віддають index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
