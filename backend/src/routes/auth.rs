@@ -233,6 +233,7 @@ pub async fn change_password(
     let new_hash = password::hash(body.new_password).await?;
 
     let mut tx = state.db.begin().await?;
+    crate::sync::lock_changes(&mut tx).await?;
     // Условие на прежний хэш: если пароль за это время уже сменили (второй запрос, сброс
     // владельцем), этот запрос ничего не меняет. UPDATE блокирует строку сотрудника, поэтому
     // идущее одновременно обновление токена дождётся конца и получит уже закрытую сессию.

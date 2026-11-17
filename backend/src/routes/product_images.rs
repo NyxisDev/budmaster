@@ -98,6 +98,9 @@ pub async fn upload(
         .map_err(|error| ApiError::Internal(anyhow::Error::new(error).context("не удалось сохранить фото")))?;
 
     let mut tx = state.db.begin().await?;
+    // Сначала общая блокировка изменений, как у всех пишущих транзакций: иначе загрузка фото
+    // и правка того же товара с устройства могли бы ждать друг друга бесконечно.
+    crate::sync::lock_changes(&mut tx).await?;
     // Строка товара блокируется: одновременные загрузки не превысят лимит фото вместе.
     let (count, max_sort) = image_count(&mut tx, product_id, true).await?;
     if count >= MAX_IMAGES_PER_PRODUCT {

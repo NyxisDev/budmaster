@@ -22,6 +22,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::auth::ActiveUser;
 use crate::catalog::{images, public};
+use crate::sync;
 use crate::error::{ApiError, ApiResult};
 
 /// Запросы этого этапа — небольшие JSON; всё крупнее отклоняется до разбора.
@@ -48,8 +49,27 @@ pub fn router(state: AppState) -> Router {
             "/products/{id}/images/{image_id}",
             patch(product_images::reorder).delete(product_images::remove),
         )
+        .route("/sync/pull", get(sync::pull::pull))
+        .route("/stock/movements", get(sync::pull::movements))
         // Обычный запрос должен уложиться в 30 секунд. Действует на маршруты, объявленные выше.
         .route_layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(30)))
+        // Пачка операций с устройства: до 2 МБ и 2 минуты на обработку.
+        .route(
+            "/sync/push",
+            post(sync::push).layer(
+                tower::ServiceBuilder::new()
+                    .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(120)))
+                    .layer(DefaultBodyLimit::max(sync::MAX_PUSH_BYTES)),
+            ),
+        )
+        .route(
+            "/sync/drain",
+            post(sync::drain).layer(
+                tower::ServiceBuilder::new()
+                    .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(120)))
+                    .layer(DefaultBodyLimit::max(sync::MAX_PUSH_BYTES)),
+            ),
+        )
         // Загрузка фото: лимит тела 10 МБ вместо 64 КБ и 3 минуты на запрос —
         // 10 МБ по медленной мобильной сети в 30 секунд не успевают.
         .route(

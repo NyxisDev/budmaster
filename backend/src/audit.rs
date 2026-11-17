@@ -56,6 +56,11 @@ impl<'a> Entry<'a> {
         self
     }
 
+    pub fn at(mut self, occurred_at: OffsetDateTime) -> Self {
+        self.occurred_at = occurred_at;
+        self
+    }
+
     pub fn details(mut self, details: Value) -> Self {
         self.details = details;
         self

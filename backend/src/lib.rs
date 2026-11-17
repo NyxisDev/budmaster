@@ -9,6 +9,7 @@ pub mod config;
 pub mod error;
 pub mod permissions;
 pub mod routes;
+pub mod sync;
 
 use std::sync::Arc;
 

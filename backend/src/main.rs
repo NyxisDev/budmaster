@@ -39,6 +39,8 @@ enum Command {
     },
     /// Импортировать каталог из файла JSON, поданного на стандартный ввод
     ImportCatalog,
+    /// Пересчитать кэш остатков из движений товара
+    RebuildBalances,
     /// Создать склад (для первого запуска)
     CreateWarehouse {
         #[arg(long)]
@@ -93,6 +95,12 @@ async fn main() -> anyhow::Result<()> {
                 summary.products_created,
                 summary.products_skipped
             );
+            Ok(())
+        }
+        Command::RebuildBalances => {
+            let db = connect().await?;
+            let fixed = budmaster_server::sync::stock::rebuild_balances(&db).await?;
+            println!("Остатки пересчитаны. Исправлено строк: {fixed}.");
             Ok(())
         }
         Command::CreateWarehouse { name, address } => {

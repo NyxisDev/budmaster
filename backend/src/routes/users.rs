@@ -89,6 +89,8 @@ pub async fn create(
     let password_hash = password::hash(body.password).await?;
 
     let mut tx = state.db.begin().await?;
+    // Общая блокировка изменений — первой, как во всех пишущих путях (см. sync/mod.rs).
+    crate::sync::lock_changes(&mut tx).await?;
     ensure_active_warehouse(&mut tx, body.default_warehouse_id).await?;
 
     let id = Uuid::new_v4();
@@ -167,6 +169,8 @@ pub async fn update(
     }
 
     let mut tx = state.db.begin().await?;
+    // Общая блокировка изменений — первой, как во всех пишущих путях (см. sync/mod.rs).
+    crate::sync::lock_changes(&mut tx).await?;
     let before = lock_worker(&mut tx, id).await?;
     if let Some(warehouse_id) = body.default_warehouse_id {
         ensure_active_warehouse(&mut tx, warehouse_id).await?;
@@ -210,12 +214,16 @@ pub async fn block(
     ApiPath(id): ApiPath<Uuid>,
 ) -> ApiResult<Json<UserDto>> {
     let mut tx = state.db.begin().await?;
+    // Общая блокировка изменений — первой, как во всех пишущих путях (см. sync/mod.rs).
+    crate::sync::lock_changes(&mut tx).await?;
     let user = lock_worker(&mut tx, id).await?;
     if !user.is_active {
         return Err(ApiError::Conflict("already_blocked"));
     }
 
-    let now = OffsetDateTime::now_utc();
+    // Время из базы, как и у отзыва токенов в этой же транзакции: досылка с заблокированного
+    // устройства опознаёт токен, отозванный именно этой блокировкой, по совпадению времени.
+    let now: OffsetDateTime = sqlx::query_scalar("SELECT now()").fetch_one(&mut *tx).await?;
     sqlx::query("UPDATE users SET is_active = false, updated_at = $2 WHERE id = $1")
         .bind(id)
         .bind(now)
@@ -242,12 +250,16 @@ pub async fn unblock(
     ApiPath(id): ApiPath<Uuid>,
 ) -> ApiResult<Json<UserDto>> {
     let mut tx = state.db.begin().await?;
+    // Общая блокировка изменений — первой, как во всех пишущих путях (см. sync/mod.rs).
+    crate::sync::lock_changes(&mut tx).await?;
     let user = lock_worker(&mut tx, id).await?;
     if user.is_active {
         return Err(ApiError::Conflict("not_blocked"));
     }
 
-    let now = OffsetDateTime::now_utc();
+    // Время из базы, как и у отзыва токенов в этой же транзакции: досылка с заблокированного
+    // устройства опознаёт токен, отозванный именно этой блокировкой, по совпадению времени.
+    let now: OffsetDateTime = sqlx::query_scalar("SELECT now()").fetch_one(&mut *tx).await?;
     sqlx::query("UPDATE users SET is_active = true, updated_at = $2 WHERE id = $1")
         .bind(id)
         .bind(now)
@@ -288,6 +300,8 @@ pub async fn reset_password(
     let new_hash = password::hash(body.new_password).await?;
 
     let mut tx = state.db.begin().await?;
+    // Общая блокировка изменений — первой, как во всех пишущих путях (см. sync/mod.rs).
+    crate::sync::lock_changes(&mut tx).await?;
     lock_worker(&mut tx, id).await?;
     sqlx::query(
         "UPDATE users SET password_hash = $2, must_change_password = true, updated_at = now() WHERE id = $1",
@@ -309,7 +323,7 @@ async fn lock_worker(conn: &mut PgConnection, id: Uuid) -> ApiResult<UserDto> {
     let user: Option<UserDto> = sqlx::query_as(
         "SELECT id, login::text AS login, first_name, last_name, role, permissions,
                 default_warehouse_id, is_active, must_change_password, created_at
-         FROM users WHERE id = $1 FOR UPDATE",
+         FROM users WHERE id = $1 FOR NO KEY UPDATE",
     )
     .bind(id)
     .fetch_optional(conn)

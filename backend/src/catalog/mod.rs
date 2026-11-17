@@ -242,7 +242,7 @@ pub fn parse_money(raw: &str) -> Option<String> {
 }
 
 /// Одна строка: без управляющих символов, пробелы по краям и повторы убраны.
-fn clean_line(text: &str) -> String {
+pub fn clean_line(text: &str) -> String {
     text.chars()
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect::<String>()
@@ -252,7 +252,7 @@ fn clean_line(text: &str) -> String {
 }
 
 /// Многострочный текст: переводы строк остаются, прочие управляющие символы убираются.
-fn clean_text(text: &str) -> String {
+pub fn clean_text(text: &str) -> String {
     text.replace("\r\n", "\n").chars().filter(|c| *c == '\n' || !c.is_control()).collect::<String>().trim().to_owned()
 }
 
