@@ -23,6 +23,11 @@ pub struct Config {
     pub public_base_url: String,
     /// Папка с фото товаров.
     pub media_dir: PathBuf,
+    /// Папка архивов (журнал, реестр синхронизации, данные учёта).
+    pub archive_dir: PathBuf,
+    /// Заявок с сайта в час: с одного адреса и на один номер телефона.
+    pub orders_per_ip_hour: usize,
+    pub orders_per_phone_hour: usize,
 }
 
 impl Config {
@@ -53,6 +58,9 @@ impl Config {
                 &std::env::var("PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".to_owned()),
             )?,
             media_dir: std::env::var("MEDIA_DIR").unwrap_or_else(|_| "./media".to_owned()).into(),
+            archive_dir: std::env::var("ARCHIVE_DIR").unwrap_or_else(|_| "./archive".to_owned()).into(),
+            orders_per_ip_hour: usize::try_from(env_number("ORDERS_PER_IP_HOUR", 5, 1..=10_000)?)?,
+            orders_per_phone_hour: usize::try_from(env_number("ORDERS_PER_PHONE_HOUR", 3, 1..=10_000)?)?,
         })
     }
 }

@@ -87,6 +87,33 @@ const CHANGES: &str = "
             FROM supply_items i WHERE i.supply_id = s.id
         ), '[]'::jsonb))
     FROM supplies s WHERE s.change_seq > $1
+  UNION ALL
+    SELECT 'order', o.change_seq, jsonb_build_object(
+        'id', o.id, 'number', o.number, 'source', o.source, 'status', o.status,
+        'customer_name', o.customer_name, 'customer_phone', o.customer_phone, 'comment', o.comment,
+        'delivery_type', o.delivery_type, 'delivery_address', o.delivery_address,
+        'warehouse_id', o.warehouse_id, 'total', o.total::text, 'cancel_reason', o.cancel_reason,
+        'created_at', o.created_at,
+        'items', COALESCE((
+            SELECT jsonb_agg(jsonb_build_object(
+                'id', i.id, 'product_id', i.product_id, 'stock_unit', i.stock_unit,
+                'qty', i.qty::text, 'price', i.price::text) ORDER BY i.id)
+            FROM order_items i WHERE i.order_id = o.id
+        ), '[]'::jsonb))
+    FROM orders o WHERE o.change_seq > $1
+  UNION ALL
+    -- Продажи — без себестоимости: она не уходит на устройства.
+    SELECT 'sale', s.change_seq, jsonb_build_object(
+        'id', s.id, 'number', s.number, 'channel', s.channel, 'order_id', s.order_id,
+        'warehouse_id', s.warehouse_id, 'payment_type', s.payment_type, 'total', s.total::text,
+        'occurred_at', s.occurred_at,
+        'items', COALESCE((
+            SELECT jsonb_agg(jsonb_build_object(
+                'id', i.id, 'product_id', i.product_id, 'stock_unit', i.stock_unit,
+                'qty', i.qty::text, 'price', i.price::text) ORDER BY i.id)
+            FROM sale_items i WHERE i.sale_id = s.id
+        ), '[]'::jsonb))
+    FROM sales s WHERE s.change_seq > $1
   ORDER BY seq
   LIMIT $2";
 

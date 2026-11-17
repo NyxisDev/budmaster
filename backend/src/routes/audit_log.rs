@@ -114,3 +114,62 @@ pub async fn list(
 
     Ok(Json(json!({ "items": items, "page": page, "per_page": per_page, "total": total })))
 }
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct ArchiveRow {
+    id: Uuid,
+    dataset: String,
+    period_kind: String,
+    period_start: time::Date,
+    row_count: i64,
+    #[serde(with = "time::serde::rfc3339")]
+    created_at: OffsetDateTime,
+}
+
+/// `GET /audit-log/archives` — список архивов.
+pub async fn archives(State(state): State<AppState>, _owner: Owner) -> ApiResult<Json<serde_json::Value>> {
+    let items: Vec<ArchiveRow> = sqlx::query_as(
+        "SELECT id, dataset, period_kind, period_start, row_count, created_at FROM audit_archives
+         ORDER BY dataset, period_start DESC",
+    )
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(json!({ "items": items })))
+}
+
+#[derive(Deserialize)]
+pub struct ArchivePage {
+    page: Option<i64>,
+    per_page: Option<i64>,
+}
+
+/// `GET /audit-log/archives/{id}?page=` — записи архивного периода, только чтение.
+/// Файл проверяется по контрольной сумме из реестра.
+pub async fn archive(
+    State(state): State<AppState>,
+    _owner: Owner,
+    crate::auth::extract::ApiPath(id): crate::auth::extract::ApiPath<Uuid>,
+    ApiQuery(query): ApiQuery<ArchivePage>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let page = query.page.unwrap_or(1);
+    let per_page = query.per_page.unwrap_or(DEFAULT_PER_PAGE);
+    if !(1..=100_000).contains(&page) || !(1..=MAX_PER_PAGE).contains(&per_page) {
+        return Err(ApiError::field("page", "invalid"));
+    }
+    let row: Option<(String, Vec<u8>, String)> =
+        sqlx::query_as("SELECT file_name, sha256, dataset FROM audit_archives WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&state.db)
+            .await?;
+    let (file_name, sha256, dataset) = row.ok_or(ApiError::NotFound)?;
+    let lines = crate::archive::read_file(&state.config.archive_dir, &file_name, &sha256).await?;
+    let total = lines.len();
+    let start = usize::try_from((page - 1) * per_page).unwrap_or(usize::MAX);
+    let items: Vec<serde_json::Value> = lines
+        .iter()
+        .skip(start)
+        .take(usize::try_from(per_page).unwrap_or(0))
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect();
+    Ok(Json(json!({ "dataset": dataset, "items": items, "page": page, "per_page": per_page, "total": total })))
+}

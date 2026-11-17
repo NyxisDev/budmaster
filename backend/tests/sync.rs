@@ -248,7 +248,7 @@ async fn stock_operations_are_validated(pool: PgPoolOptions, conn: PgConnectOpti
         ("stock.pack_open", json!({ "product_id": f.screw, "warehouse_id": w, "packs": "1", "extra": 1 }), "invalid_payload"),
         ("transfer.create", json!({ "id": Uuid::new_v4(), "from_warehouse_id": w, "to_warehouse_id": w, "items": [] }), "same_warehouse"),
         ("unknown.op", json!({}), "unknown_type"),
-        ("sale.create", json!({}), "not_supported_yet"),
+        ("sale.create", json!({}), "invalid_payload"),
     ];
     for (op_type, payload, expected) in cases {
         let results = push(&f.app, &f.owner, vec![op(op_type, payload.clone())]).await;

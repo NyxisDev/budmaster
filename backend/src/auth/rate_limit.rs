@@ -147,3 +147,70 @@ mod tests {
         assert!(limiter.begin_at("someone-new", OTHER_IP, now).is_ok());
     }
 }
+
+/// Простое ограничение «не больше `max` событий за `window` на ключ» (заявки с сайта).
+pub struct WindowLimiter {
+    window: Duration,
+    max: usize,
+    hits: Mutex<HashMap<String, VecDeque<Instant>>>,
+}
+
+impl WindowLimiter {
+    pub fn new(window: Duration, max: usize) -> Self {
+        Self { window, max, hits: Mutex::new(HashMap::new()) }
+    }
+
+    /// Проверяет, есть ли место, ничего не засчитывая.
+    pub fn check(&self, key: &str) -> Result<(), u64> {
+        let now = Instant::now();
+        let mut hits = self.hits.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let Some(list) = hits.get_mut(&key.chars().take(64).collect::<String>()) else { return Ok(()) };
+        while list.front().is_some_and(|first| now.duration_since(*first) >= self.window) {
+            list.pop_front();
+        }
+        if list.len() >= self.max {
+            let oldest = list[list.len() - self.max];
+            return Err(self.window.saturating_sub(now.duration_since(oldest)).as_secs().max(1));
+        }
+        Ok(())
+    }
+
+    /// Засчитывает событие. `Err(секунд до освобождения)`, если лимит исчерпан —
+    /// тогда событие не засчитывается.
+    pub fn hit(&self, key: &str) -> Result<(), u64> {
+        let now = Instant::now();
+        let mut hits = self.hits.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if hits.len() >= MAX_KEYS {
+            let window = self.window;
+            hits.retain(|_, list| list.back().is_some_and(|last| now.duration_since(*last) < window));
+            if hits.len() >= MAX_KEYS {
+                hits.clear();
+            }
+        }
+        let list = hits.entry(key.chars().take(64).collect()).or_default();
+        while list.front().is_some_and(|first| now.duration_since(*first) >= self.window) {
+            list.pop_front();
+        }
+        if list.len() >= self.max {
+            let oldest = list[list.len() - self.max];
+            return Err(self.window.saturating_sub(now.duration_since(oldest)).as_secs().max(1));
+        }
+        list.push_back(now);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod window_tests {
+    use super::*;
+
+    #[test]
+    fn window_limiter_counts_per_key() {
+        let limiter = WindowLimiter::new(Duration::from_secs(3600), 3);
+        for _ in 0..3 {
+            assert!(limiter.hit("a").is_ok());
+        }
+        assert!(limiter.hit("a").is_err());
+        assert!(limiter.hit("b").is_ok());
+    }
+}

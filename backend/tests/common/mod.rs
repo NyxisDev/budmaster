@@ -53,6 +53,15 @@ impl Response {
 
 impl TestApp {
     pub async fn new(pool_opts: PgPoolOptions, conn_opts: PgConnectOptions) -> Self {
+        // В тестах все запросы приходят «с одного адреса»: лимит заявок не должен им мешать.
+        Self::with_order_limits(pool_opts, conn_opts, (10_000, 10_000)).await
+    }
+
+    pub async fn with_order_limits(
+        pool_opts: PgPoolOptions,
+        conn_opts: PgConnectOptions,
+        order_limits: (usize, usize),
+    ) -> Self {
         let admin = pool_opts.connect_with(conn_opts.clone()).await.expect("база для тестов");
         let app_db = PgPoolOptions::new()
             .max_connections(5)
@@ -77,6 +86,9 @@ impl TestApp {
             cors_origins: vec![],
             public_base_url: "http://api.test".to_owned(),
             media_dir: media_dir.clone(),
+            archive_dir: media_dir.join("archive"),
+            orders_per_ip_hour: order_limits.0,
+            orders_per_phone_hour: order_limits.1,
         };
         let state = AppState::new(app_db.clone(), config).unwrap();
         let warehouse_id = cli::create_warehouse(&app_db, "Склад 1", None).await.unwrap();

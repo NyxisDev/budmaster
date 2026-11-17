@@ -48,7 +48,7 @@ impl ProductInfo {
         parse_delta(raw, self.fraction_allowed(unit)).ok_or(OpError::Rejected("invalid_qty"))
     }
 
-    fn require_unit(&self, unit: StockUnit) -> Result<(), OpError> {
+    pub fn require_unit(&self, unit: StockUnit) -> Result<(), OpError> {
         if unit == StockUnit::Pack && self.pack_size.is_none() {
             return Err(OpError::Rejected("no_pack"));
         }
@@ -56,12 +56,12 @@ impl ProductInfo {
     }
 
     /// Пачки — всегда целые; штуки — дробные, если это позволяет единица товара (кг, м).
-    fn fraction_allowed(&self, unit: StockUnit) -> bool {
+    pub fn fraction_allowed(&self, unit: StockUnit) -> bool {
         unit == StockUnit::Unit && self.allow_fraction
     }
 
     /// Во сколько базовых единиц обходится одна единица учёта.
-    fn multiplier(&self, unit: StockUnit) -> i32 {
+    pub fn multiplier(&self, unit: StockUnit) -> i32 {
         match unit {
             StockUnit::Unit => 1,
             StockUnit::Pack => self.pack_size.unwrap_or(1),
@@ -69,7 +69,7 @@ impl ProductInfo {
     }
 }
 
-async fn require_warehouse(conn: &mut PgConnection, warehouse_id: Uuid) -> OpResult {
+pub async fn require_warehouse(conn: &mut PgConnection, warehouse_id: Uuid) -> OpResult {
     let exists: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM warehouses WHERE id = $1)")
         .bind(warehouse_id)
         .fetch_one(conn)
@@ -87,6 +87,8 @@ pub struct Movement<'a> {
     pub unit_cost: Option<String>,
     pub supply_item_id: Option<Uuid>,
     pub transfer_item_id: Option<Uuid>,
+    pub sale_item_id: Option<Uuid>,
+    pub return_item_id: Option<Uuid>,
     pub reason: Option<&'a str>,
 }
 
@@ -95,8 +97,8 @@ pub async fn add_movement(conn: &mut PgConnection, ctx: &OpCtx<'_>, movement: Mo
     sqlx::query(
         "INSERT INTO stock_movements
             (id, product_id, warehouse_id, stock_unit, qty, kind, unit_cost, operation_id,
-             supply_item_id, transfer_item_id, reason, user_id, device_id, occurred_at)
-         VALUES ($1, $2, $3, $4, $5::numeric, $6::movement_kind, $7::numeric, $8, $9, $10, $11, $12, $13, $14)",
+             supply_item_id, transfer_item_id, sale_item_id, return_item_id, reason, user_id, device_id, occurred_at)
+         VALUES ($1, $2, $3, $4, $5::numeric, $6::movement_kind, $7::numeric, $8, $9, $10, $11, $12, $13, $14, $15, $16)",
     )
     .bind(Uuid::new_v4())
     .bind(movement.product_id)
@@ -108,6 +110,8 @@ pub async fn add_movement(conn: &mut PgConnection, ctx: &OpCtx<'_>, movement: Mo
     .bind(ctx.op_id)
     .bind(movement.supply_item_id)
     .bind(movement.transfer_item_id)
+    .bind(movement.sale_item_id)
+    .bind(movement.return_item_id)
     .bind(movement.reason)
     .bind(ctx.user.id)
     .bind(ctx.user.device_id)
@@ -182,7 +186,7 @@ async fn update_average_cost(
     Ok(())
 }
 
-fn clean_reason(raw: &str) -> Result<String, OpError> {
+pub fn clean_reason(raw: &str) -> Result<String, OpError> {
     let reason: String = raw.chars().filter(|c| !c.is_control()).collect::<String>().trim().to_owned();
     if (1..=MAX_REASON).contains(&reason.chars().count()) {
         Ok(reason)
@@ -237,6 +241,8 @@ pub async fn pack_open(conn: &mut PgConnection, ctx: &OpCtx<'_>, op: PackOpen) -
                 unit_cost: None,
                 supply_item_id: None,
                 transfer_item_id: None,
+                sale_item_id: None,
+                return_item_id: None,
                 reason: None,
             },
         )
@@ -285,6 +291,8 @@ pub async fn write_off(conn: &mut PgConnection, ctx: &OpCtx<'_>, op: WriteOff) -
             unit_cost: cost,
             supply_item_id: None,
             transfer_item_id: None,
+            sale_item_id: None,
+            return_item_id: None,
             reason: Some(&reason),
         },
     )
@@ -330,6 +338,8 @@ pub async fn adjust(conn: &mut PgConnection, ctx: &OpCtx<'_>, op: Adjust) -> OpR
             unit_cost: None,
             supply_item_id: None,
             transfer_item_id: None,
+            sale_item_id: None,
+            return_item_id: None,
             reason: Some(&reason),
         },
     )
@@ -424,6 +434,8 @@ pub async fn transfer(conn: &mut PgConnection, ctx: &OpCtx<'_>, op: Transfer) ->
                     unit_cost: None,
                     supply_item_id: None,
                     transfer_item_id: Some(item.id),
+                    sale_item_id: None,
+                    return_item_id: None,
                     reason: None,
                 },
             )
@@ -717,6 +729,8 @@ pub async fn supply_receive(conn: &mut PgConnection, ctx: &OpCtx<'_>, op: Supply
                     unit_cost: Some(unit_cost.clone()),
                     supply_item_id: Some(item_id),
                     transfer_item_id: None,
+                    sale_item_id: None,
+                    return_item_id: None,
                     reason: None,
                 },
             )
@@ -807,30 +821,52 @@ fn normalize(value: &str) -> String {
     }
 }
 
-/// Пересчитывает кэш остатков из движений. Команда сервера: на случай, если кэш когда-нибудь
+/// Пересчитывает кэш остатков: остаток на начало + движения, плюс резервы открытых заказов. Команда сервера: на случай, если кэш когда-нибудь
 /// разойдётся с движениями. Возвращает число строк, которые пришлось исправить.
 pub async fn rebuild_balances(db: &sqlx::PgPool) -> sqlx::Result<u64> {
     let mut tx = db.begin().await?;
     super::lock_changes(&mut tx).await?;
     let result = sqlx::query(
         "WITH sums AS (
-            SELECT product_id, warehouse_id,
-                   COALESCE(sum(qty) FILTER (WHERE stock_unit = 'unit'), 0) AS units,
-                   COALESCE(sum(qty) FILTER (WHERE stock_unit = 'pack'), 0) AS packs
-            FROM stock_movements GROUP BY product_id, warehouse_id
+            -- остаток на начало (движения, ушедшие в архив) + движения, оставшиеся в базе
+            SELECT product_id, warehouse_id, sum(units) AS units, sum(packs) AS packs FROM (
+                SELECT product_id, warehouse_id,
+                       COALESCE(sum(qty) FILTER (WHERE stock_unit = 'unit'), 0) AS units,
+                       COALESCE(sum(qty) FILTER (WHERE stock_unit = 'pack'), 0) AS packs
+                FROM stock_movements GROUP BY product_id, warehouse_id
+              UNION ALL
+                SELECT product_id, warehouse_id, qty_units, qty_packs FROM stock_opening_balances
+            ) t GROUP BY product_id, warehouse_id
+         ), reserves AS (
+            -- резерв — строки подтверждённых и собранных заказов на их складе
+            SELECT i.product_id, o.warehouse_id,
+                   COALESCE(sum(i.qty) FILTER (WHERE i.stock_unit = 'unit'), 0) AS units,
+                   COALESCE(sum(i.qty) FILTER (WHERE i.stock_unit = 'pack'), 0) AS packs
+            FROM order_items i JOIN orders o ON o.id = i.order_id
+            WHERE o.status IN ('confirmed', 'assembled')
+            GROUP BY i.product_id, o.warehouse_id
+         ), keys AS (
+            SELECT product_id, warehouse_id FROM sums
+            UNION SELECT product_id, warehouse_id FROM reserves
+            UNION SELECT product_id, warehouse_id FROM stock_balances
          ), target AS (
-            SELECT COALESCE(s.product_id, b.product_id) AS product_id,
-                   COALESCE(s.warehouse_id, b.warehouse_id) AS warehouse_id,
-                   COALESCE(s.units, 0) AS units, COALESCE(s.packs, 0) AS packs
-            FROM sums s FULL JOIN stock_balances b
-              ON b.product_id = s.product_id AND b.warehouse_id = s.warehouse_id
+            SELECT k.product_id, k.warehouse_id,
+                   COALESCE(s.units, 0) AS units, COALESCE(s.packs, 0) AS packs,
+                   COALESCE(r.units, 0) AS reserved_units, COALESCE(r.packs, 0) AS reserved_packs
+            FROM keys k
+            LEFT JOIN sums s ON s.product_id = k.product_id AND s.warehouse_id = k.warehouse_id
+            LEFT JOIN reserves r ON r.product_id = k.product_id AND r.warehouse_id = k.warehouse_id
          )
-         INSERT INTO stock_balances (product_id, warehouse_id, qty_units, qty_packs)
-         SELECT product_id, warehouse_id, units, packs FROM target
+         INSERT INTO stock_balances (product_id, warehouse_id, qty_units, qty_packs, reserved_units, reserved_packs)
+         SELECT product_id, warehouse_id, units, packs, reserved_units, reserved_packs FROM target
          ON CONFLICT (product_id, warehouse_id) DO UPDATE
-            SET qty_units = EXCLUDED.qty_units, qty_packs = EXCLUDED.qty_packs, updated_at = now()
-            WHERE stock_balances.qty_units IS DISTINCT FROM EXCLUDED.qty_units
-               OR stock_balances.qty_packs IS DISTINCT FROM EXCLUDED.qty_packs",
+            SET qty_units = EXCLUDED.qty_units, qty_packs = EXCLUDED.qty_packs,
+                reserved_units = EXCLUDED.reserved_units, reserved_packs = EXCLUDED.reserved_packs,
+                updated_at = now()
+            WHERE (stock_balances.qty_units, stock_balances.qty_packs,
+                   stock_balances.reserved_units, stock_balances.reserved_packs)
+               IS DISTINCT FROM
+                  (EXCLUDED.qty_units, EXCLUDED.qty_packs, EXCLUDED.reserved_units, EXCLUDED.reserved_packs)",
     )
     .execute(&mut *tx)
     .await?;

@@ -7,6 +7,7 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use super::{OpCtx, OpError, OpResult, reference, stock};
+use crate::sales::{orders, pos};
 
 pub async fn apply(conn: &mut PgConnection, ctx: &OpCtx<'_>, op_type: &str, payload: &Value) -> OpResult {
     match op_type {
@@ -33,11 +34,11 @@ pub async fn apply(conn: &mut PgConnection, ctx: &OpCtx<'_>, op_type: &str, payl
 
         "session.warehouse_switch" => warehouse_switch(conn, ctx, parse(payload)?).await,
 
-        // Продажи, возвраты и заказы — этап 5. Пока такие операции отклоняются явно,
-        // чтобы устройство показало их как непринятые, а не потеряло.
-        "sale.create" | "return.create" | "order.create" | "order.update" | "order.set_status" => {
-            Err(OpError::Rejected("not_supported_yet"))
-        }
+        "order.create" => orders::create(conn, ctx, parse(payload)?).await,
+        "order.update" => orders::update(conn, ctx, parse(payload)?).await,
+        "order.set_status" => orders::set_status(conn, ctx, parse(payload)?).await,
+        "sale.create" => pos::sale(conn, ctx, parse(payload)?).await,
+        "return.create" => pos::return_goods(conn, ctx, parse(payload)?).await,
         _ => Err(OpError::Rejected("unknown_type")),
     }
 }

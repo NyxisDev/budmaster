@@ -173,13 +173,27 @@ pub async fn store(dir: &Path, name: &str, bytes: &[u8]) -> std::io::Result<()> 
         let mut file = tokio::fs::File::create(&temp).await?;
         file.write_all(bytes).await?;
         file.sync_all().await?;
-        tokio::fs::rename(&temp, dir.join(name)).await
+        tokio::fs::rename(&temp, dir.join(name)).await?;
+        // Переименование — запись в папке: без сброса папки на диск оно может пропасть
+        // при отключении питания, хотя сам файл записан.
+        sync_dir(dir).await
     }
     .await;
     if result.is_err() {
         let _ = tokio::fs::remove_file(&temp).await;
     }
     result
+}
+
+#[cfg(unix)]
+async fn sync_dir(dir: &Path) -> std::io::Result<()> {
+    tokio::fs::File::open(dir).await?.sync_all().await
+}
+
+/// В Windows папку так сбросить нельзя; сервер работает в Linux, здесь — только разработка.
+#[cfg(not(unix))]
+async fn sync_dir(_dir: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 /// Удаляет записанные файлы, если загрузка не дошла до конца — в том числе когда запрос

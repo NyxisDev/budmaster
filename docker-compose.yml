@@ -2,6 +2,7 @@
 #
 #   docker compose up -d --build        запустить
 #   docker compose run --rm backend create-owner --login ... --first-name ... --last-name ...
+#   docker compose run --rm archiver      архивация (раз в месяц, по расписанию на сервере)
 #
 # Обратный прокси с HTTPS и резервные копии добавляются на этапе деплоя (docs/design.md, раздел 13).
 
@@ -49,6 +50,8 @@ services:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?задайте PUBLIC_BASE_URL в .env}
     volumes:
       - media:/var/lib/budmaster/media
+      # архивы сервер только читает (владелец смотрит их в приложении)
+      - archive:/var/lib/budmaster/archive:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -63,6 +66,22 @@ services:
       timeout: 3s
       retries: 5
 
+  # Архивация старых данных. Запускается вручную или по расписанию (cron) раз в месяц;
+  # работает под ролью-владельцем базы — только она может убирать данные из неизменяемых таблиц.
+  archiver:
+    build: ./backend
+    command: ["archive"]
+    profiles: ["tools"]
+    environment:
+      MIGRATION_DATABASE_URL: postgres://budmaster_owner:${POSTGRES_PASSWORD}@postgres:5432/budmaster
+    volumes:
+      - archive:/var/lib/budmaster/archive
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
 volumes:
   pgdata:
   media:
+  archive:

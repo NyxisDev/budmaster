@@ -39,6 +39,8 @@ enum Command {
     },
     /// Импортировать каталог из файла JSON, поданного на стандартный ввод
     ImportCatalog,
+    /// Архивировать старые данные (раз в месяц; нужны MIGRATION_DATABASE_URL и ARCHIVE_DIR)
+    Archive,
     /// Пересчитать кэш остатков из движений товара
     RebuildBalances,
     /// Создать склад (для первого запуска)
@@ -95,6 +97,20 @@ async fn main() -> anyhow::Result<()> {
                 summary.products_created,
                 summary.products_skipped
             );
+            Ok(())
+        }
+        Command::Archive => {
+            // Архивация удаляет из неизменяемых таблиц — это может только роль-владелец базы.
+            let owner_url = env("MIGRATION_DATABASE_URL")?;
+            let owner_db = PgPoolOptions::new().max_connections(2).connect(&owner_url).await?;
+            let dir = std::env::var("ARCHIVE_DIR").unwrap_or_else(|_| "./archive".to_owned());
+            let today: time::Date = sqlx::query_scalar("SELECT (now() AT TIME ZONE 'Europe/Kyiv')::date")
+                .fetch_one(&owner_db)
+                .await?;
+            let report = budmaster_server::archive::run(&owner_db, std::path::Path::new(&dir), today).await?;
+            for line in report.lines {
+                println!("{line}");
+            }
             Ok(())
         }
         Command::RebuildBalances => {

@@ -22,7 +22,7 @@ const MAX_PER_PAGE: i64 = 48;
 const MAX_QUERY_CHARS: usize = 100;
 
 /// Категории, видимые на сайте: не удалённые и без удалённых предков.
-const VISIBLE_CATEGORIES: &str = "visible AS (
+pub const VISIBLE_CATEGORIES: &str = "visible AS (
         SELECT id, parent_id, name, slug, sort_order FROM categories
         WHERE parent_id IS NULL AND NOT is_deleted
       UNION ALL

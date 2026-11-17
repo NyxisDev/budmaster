@@ -22,7 +22,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::auth::ActiveUser;
 use crate::catalog::{images, public};
-use crate::sync;
+use crate::{sales, sync};
 use crate::error::{ApiError, ApiResult};
 
 /// Запросы этого этапа — небольшие JSON; всё крупнее отклоняется до разбора.
@@ -42,6 +42,8 @@ pub fn router(state: AppState) -> Router {
         .route("/users/{id}/unblock", post(users::unblock))
         .route("/users/{id}/reset-password", post(users::reset_password))
         .route("/audit-log", get(audit_log::list))
+        .route("/audit-log/archives", get(audit_log::archives))
+        .route("/audit-log/archives/{id}", get(audit_log::archive))
         .route("/public/categories", get(public::categories))
         .route("/public/products", get(public::products))
         .route("/public/products/{id}", get(public::product))
@@ -50,6 +52,13 @@ pub fn router(state: AppState) -> Router {
             patch(product_images::reorder).delete(product_images::remove),
         )
         .route("/sync/pull", get(sync::pull::pull))
+        .route("/orders", get(sales::read::list_orders))
+        .route("/orders/{id}", get(sales::read::get_order))
+        .route("/sales", get(sales::read::list_sales))
+        .route("/sales/{id}", get(sales::read::get_sale))
+        .route("/reports/summary", get(sales::reports::summary))
+        .route("/reports/products", get(sales::reports::products))
+        .route("/public/orders", post(sales::public::create))
         .route("/stock/movements", get(sync::pull::movements))
         // Обычный запрос должен уложиться в 30 секунд. Действует на маршруты, объявленные выше.
         .route_layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(30)))
