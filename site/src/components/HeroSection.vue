@@ -2,6 +2,9 @@
 import { RouterLink } from 'vue-router'
 import { ArrowRight } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
+
+// Путь с учётом адреса публикации: сайт может жить не в корне домена (например, GitHub Pages).
+const heroBackground = `${import.meta.env.BASE_URL}hero_background.png`
 </script>
 
 <template>
@@ -9,7 +12,7 @@ import { Button } from '@/components/ui/button'
   <section
     id="home"
     class="relative isolate flex min-h-[calc(100svh-4rem)] items-center bg-[#0b1121] bg-cover bg-center"
-    style="background-image: url('/hero_background.png')"
+    :style="{ backgroundImage: `url('${heroBackground}')` }"
   >
     <div class="absolute inset-0 -z-10 bg-gradient-to-br from-[#0b1121]/95 via-[#0b1121]/80 to-[#151d30]/85" />
 
