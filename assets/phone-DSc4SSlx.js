@@ -1,0 +1,1 @@
+function e(e){let t=String(e??``).replace(/\D/g,``),n;if(t.length===12&&t.startsWith(`380`))n=t.slice(3);else if(t.length===11&&t.startsWith(`80`))n=t.slice(2);else if(t.length===10&&t.startsWith(`0`))n=t.slice(1);else return null;return n.startsWith(`0`)?null:`+380${n}`}export{e as t};
