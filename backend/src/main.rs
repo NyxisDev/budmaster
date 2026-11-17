@@ -37,6 +37,8 @@ enum Command {
         #[arg(long)]
         login: String,
     },
+    /// Импортировать каталог из файла JSON, поданного на стандартный ввод
+    ImportCatalog,
     /// Создать склад (для первого запуска)
     CreateWarehouse {
         #[arg(long)]
@@ -75,6 +77,22 @@ async fn main() -> anyhow::Result<()> {
             let db = connect().await?;
             cli::reset_owner_password(&db, &login, password).await?;
             println!("Пароль изменён, все сессии владельца закрыты.");
+            Ok(())
+        }
+        Command::ImportCatalog => {
+            use std::io::Read;
+            let mut json = String::new();
+            std::io::stdin().read_to_string(&mut json)?;
+            let file = budmaster_server::catalog::import::parse(&json)?;
+            let db = connect().await?;
+            let summary = budmaster_server::catalog::import::run(&db, file).await?;
+            println!(
+                "Категории: добавлено {}, уже были {}. Товары: добавлено {}, уже были {}.",
+                summary.categories_created,
+                summary.categories_skipped,
+                summary.products_created,
+                summary.products_skipped
+            );
             Ok(())
         }
         Command::CreateWarehouse { name, address } => {

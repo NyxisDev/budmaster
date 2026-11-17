@@ -45,11 +45,18 @@ services:
       JWT_SECRET: ${JWT_SECRET:?задайте JWT_SECRET в .env}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       TRUST_PROXY: ${TRUST_PROXY:-false}
+      # Адрес сервера, каким его видит браузер: из него строятся ссылки на фото.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?задайте PUBLIC_BASE_URL в .env}
+    volumes:
+      - media:/var/lib/budmaster/media
     depends_on:
       migrate:
         condition: service_completed_successfully
     ports:
       - "127.0.0.1:8080:8080"
+    # Потолок памяти сервера: даже при наплыве фото он не отнимет память у базы и системы.
+    # Обработка фото берёт до 160 МБ на снимок, одновременно — не больше двух.
+    mem_limit: 1g
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
       interval: 10s
@@ -58,3 +65,4 @@ services:
 
 volumes:
   pgdata:
+  media:

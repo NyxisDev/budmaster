@@ -73,7 +73,12 @@ export async function getProduct(id) {
   return clone(found)
 }
 
-export async function createOrder(payload) {
+/**
+ * Демонстраційна заявка: перевіряє її так само, як сервер, але нікуди не надсилає.
+ * `findProduct(id)` повертає товар або null — за замовчуванням з демонстраційних даних,
+ * а коли каталог уже береться з сервера, то з нього.
+ */
+export async function createOrder(payload, findProduct = async (id) => products.find((p) => p.id === id) ?? null) {
   await delay()
 
   // Поле-пастка: людина його не бачить і не заповнює.
@@ -103,7 +108,7 @@ export async function createOrder(payload) {
       const lineKey = `${item.product_id}:${item.stock_unit}`
       const duplicate = seen.has(lineKey)
       seen.add(lineKey)
-      const found = products.find((product) => product.id === item.product_id)
+      const found = await findProduct(item.product_id)
       const qty = Number(item.qty)
       const isPack = item.stock_unit === 'pack'
       const wholeOnly = isPack || !found?.unit.allow_fraction

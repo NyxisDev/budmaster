@@ -10,6 +10,7 @@ axum = "0.8.9"
 base64 = "0.23.1"
 clap = { version = "4.6.7", features = ["derive", "env"] }
 dotenvy = "0.15.7"
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 jsonwebtoken = { version = "12.0.0", features = ["rust_crypto"] }
 rand = "0.10.4"
 rpassword = "7.5.5"
@@ -21,10 +22,10 @@ thiserror = "2.0.21"
 time = { version = "0.3.55", features = ["serde", "formatting", "parsing", "macros"] }
 tokio = { version = "1.54.1", features = ["full"] }
 tower = { version = "0.5.3", features = ["util"] }
-tower-http = { version = "0.7.1", features = ["trace", "cors", "limit", "timeout"] }
+tower-http = { version = "0.7.1", features = ["trace", "cors", "limit", "timeout", "fs", "set-header"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-uuid = { version = "1.29.2", features = ["v4", "serde"] }
+uuid = { version = "1.29.2", features = ["v4", "serde", "v5"] }
 
 [dev-dependencies]
 http-body-util = "0.1.5"

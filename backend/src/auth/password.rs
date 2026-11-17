@@ -69,11 +69,18 @@ where
     T: Send + 'static,
     F: FnOnce() -> anyhow::Result<T> + Send + 'static,
 {
-    let _slot = tokio::time::timeout(QUEUE_TIMEOUT, SLOTS.acquire())
+    let slot = tokio::time::timeout(QUEUE_TIMEOUT, SLOTS.acquire())
         .await
         .map_err(|_| PasswordError::Busy)?
         .map_err(|error| PasswordError::Other(error.into()))?;
-    let result = tokio::task::spawn_blocking(job).await.map_err(|error| PasswordError::Other(error.into()))?;
+    // Слот освобождается, только когда хэш досчитан: обрыв запроса не открывает место
+    // для новой проверки, пока старая ещё занимает процессор и память.
+    let result = tokio::task::spawn_blocking(move || {
+        let _slot = slot;
+        job()
+    })
+    .await
+    .map_err(|error| PasswordError::Other(error.into()))?;
     Ok(result?)
 }
 

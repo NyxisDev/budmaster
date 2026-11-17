@@ -133,6 +133,7 @@ watch(
           v-model="searchDraft"
           type="search"
           placeholder="Пошук товарів"
+          maxlength="100"
           aria-label="Пошук товарів"
           class="h-11 pr-24 pl-9 text-base"
           enterkeyhint="search"

@@ -28,6 +28,7 @@ pub struct TestApp {
     /// Соединения под ролью сервера.
     pub app_db: PgPool,
     pub warehouse_id: Uuid,
+    pub media_dir: std::path::PathBuf,
 }
 
 pub struct Session {
@@ -65,6 +66,8 @@ impl TestApp {
             .await
             .expect("соединение под ролью сервера");
 
+        // У каждого теста своя папка для фото.
+        let media_dir = std::env::temp_dir().join(format!("budmaster-test-{}", Uuid::new_v4()));
         let config = Config {
             bind_addr: "127.0.0.1:0".parse().unwrap(),
             jwt_secret: b"test-secret-test-secret-test-secret!".to_vec(),
@@ -72,11 +75,13 @@ impl TestApp {
             refresh_ttl_days: 60,
             trust_proxy: false,
             cors_origins: vec![],
+            public_base_url: "http://api.test".to_owned(),
+            media_dir: media_dir.clone(),
         };
         let state = AppState::new(app_db.clone(), config).unwrap();
         let warehouse_id = cli::create_warehouse(&app_db, "Склад 1", None).await.unwrap();
 
-        Self { router: routes::router(state), admin, app_db, warehouse_id }
+        Self { router: routes::router(state), admin, app_db, warehouse_id, media_dir }
     }
 
     pub async fn request(&self, method: &str, path: &str, token: Option<&str>, body: Option<Value>) -> Response {
@@ -104,6 +109,11 @@ impl TestApp {
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         let body = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
         Response { status, body, retry_after }
+    }
+
+    /// Сам маршрутизатор — для запросов, которым нужен разбор заголовков ответа.
+    pub fn router(&self) -> Router {
+        self.router.clone()
     }
 
     pub async fn get(&self, path: &str, token: &str) -> Response {

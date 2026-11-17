@@ -2,6 +2,7 @@
 
 pub mod audit_log;
 pub mod auth;
+pub mod product_images;
 pub mod users;
 
 use std::time::Duration;
@@ -9,6 +10,7 @@ use std::time::Duration;
 use axum::extract::{DefaultBodyLimit, State};
 use axum::http::{HeaderValue, Method, StatusCode, header};
 use axum::routing::{get, patch, post};
+use tower_http::services::ServeDir;
 use axum::{Json, Router};
 use serde::Serialize;
 use serde_json::json;
@@ -19,6 +21,7 @@ use uuid::Uuid;
 
 use crate::AppState;
 use crate::auth::ActiveUser;
+use crate::catalog::{images, public};
 use crate::error::{ApiError, ApiResult};
 
 /// Запросы этого этапа — небольшие JSON; всё крупнее отклоняется до разбора.
@@ -38,16 +41,39 @@ pub fn router(state: AppState) -> Router {
         .route("/users/{id}/unblock", post(users::unblock))
         .route("/users/{id}/reset-password", post(users::reset_password))
         .route("/audit-log", get(audit_log::list))
+        .route("/public/categories", get(public::categories))
+        .route("/public/products", get(public::products))
+        .route("/public/products/{id}", get(public::product))
+        .route(
+            "/products/{id}/images/{image_id}",
+            patch(product_images::reorder).delete(product_images::remove),
+        )
+        // Обычный запрос должен уложиться в 30 секунд. Действует на маршруты, объявленные выше.
+        .route_layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(30)))
+        // Загрузка фото: лимит тела 10 МБ вместо 64 КБ и 3 минуты на запрос —
+        // 10 МБ по медленной мобильной сети в 30 секунд не успевают.
+        .route(
+            "/products/{id}/images",
+            post(product_images::upload).layer(
+                tower::ServiceBuilder::new()
+                    .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(180)))
+                    .layer(DefaultBodyLimit::max(images::MAX_UPLOAD_BYTES)),
+            ),
+        )
         .method_not_allowed_fallback(|| async { ApiError::MethodNotAllowed })
         .fallback(|| async { ApiError::NotFound });
 
+    // Фото отдаются как файлы. В папке лежат только JPEG, созданные самим сервером.
+    let media = ServeDir::new(&state.config.media_dir).append_index_html_on_directories(false);
+    let media = Router::new().fallback_service(media).layer(axum::middleware::map_response(media_response));
+
     Router::new()
         .route("/health", get(health))
+        .nest("/media", media)
         .nest("/api/v1", api)
         .method_not_allowed_fallback(|| async { ApiError::MethodNotAllowed })
         .fallback(|| async { ApiError::NotFound })
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
-        .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(30)))
         .layer(cors_layer(&state.config.cors_origins))
         // В журнал сервера идут метод, путь и код ответа. Тела запросов и заголовки
         // (а значит, пароли и токены) туда не попадают.
@@ -55,12 +81,32 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
+/// Заголовки для фото. nosniff запрещает браузеру трактовать файл как что-то, кроме картинки.
+/// Кэш — на сутки, а не навсегда: убранное фото не должно жить в кэшах браузеров год.
+/// Любой отказ (нет файла, не тот метод) отдаётся в общем формате ошибок и не кэшируется.
+async fn media_response(response: axum::response::Response) -> axum::response::Response {
+    use axum::response::IntoResponse;
+
+    let status = response.status();
+    if status.is_success() || status == StatusCode::NOT_MODIFIED || status == StatusCode::PARTIAL_CONTENT {
+        let mut response = response;
+        let headers = response.headers_mut();
+        headers.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=86400"));
+        return response;
+    }
+    let error = if status == StatusCode::METHOD_NOT_ALLOWED { ApiError::MethodNotAllowed } else { ApiError::NotFound };
+    let mut response = error.into_response();
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
 /// Запросы из браузера разрешены только перечисленным сайтам. Список пуст — никому.
 fn cors_layer(origins: &[String]) -> CorsLayer {
     let allowed: Vec<HeaderValue> = origins.iter().filter_map(|origin| origin.parse().ok()).collect();
     CorsLayer::new()
         .allow_origin(AllowOrigin::list(allowed))
-        .allow_methods([Method::GET, Method::POST, Method::PATCH])
+        .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
         .max_age(Duration::from_secs(3600))
 }

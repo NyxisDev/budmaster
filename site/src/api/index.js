@@ -1,16 +1,22 @@
-// Публічний API сайту. Поки сервера немає, працює на демонстраційних даних.
-// Щоб перейти на справжній сервер, задайте в .env:
+// Публічний API сайту.
+//
+// Каталог (категорії й товари) береться із сервера, якщо в .env задано:
 //   VITE_USE_MOCKS=false
 //   VITE_API_URL=https://адреса-сервера
+// інакше — з демонстраційних даних у ./mock.
+//
+// Заявки поки демонстраційні завжди: сервер прийматиме їх з етапу 5 плану. Тоді в .env
+// додається VITE_ORDERS_LIVE=true, і заявки підуть на сервер.
 
 import { ApiError } from './errors'
 
 export { ApiError }
 
-const useMocks = import.meta.env.VITE_USE_MOCKS !== 'false'
+const catalogFromMocks = import.meta.env.VITE_USE_MOCKS !== 'false'
+const ordersLive = !catalogFromMocks && import.meta.env.VITE_ORDERS_LIVE === 'true'
 
-/** true — сайт показує демонстраційні дані, заявки нікуди не надсилаються. */
-export const isDemo = useMocks
+/** true — заявки з сайту нікуди не надсилаються (сайт показує про це попередження). */
+export const isDemo = !ordersLive
 const baseUrl = `${(import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')}/api/v1`
 
 async function request(path, { method = 'GET', query, body } = {}) {
@@ -46,8 +52,19 @@ const http = {
   createOrder: (payload) => request('/public/orders', { method: 'POST', body: payload }),
 }
 
-// Демонстраційні дані завантажуються окремим файлом і не потрапляють у збірку для справжнього сервера.
-const impl = async () => (useMocks ? await import('./mock/server') : http)
+// Демонстраційні дані завантажуються окремим файлом, лише коли вони справді потрібні.
+const mock = () => import('./mock/server')
+const impl = async () => (catalogFromMocks ? await mock() : http)
+
+/** Товар із каталогу сервера або null, якщо його немає (для перевірки демонстраційної заявки). */
+async function findServerProduct(id) {
+  try {
+    return await http.getProduct(id)
+  } catch (error) {
+    if (error?.status === 404) return null
+    throw error
+  }
+}
 
 /** Категорії плоским списком: { items: [{ id, parent_id, name, slug, sort_order }] } */
 export const getCategories = async () => (await impl()).getCategories()
@@ -59,4 +76,8 @@ export const getProducts = async (params) => (await impl()).getProducts(params)
 export const getProduct = async (id) => (await impl()).getProduct(id)
 
 /** Заявка з сайту → { id, number, total }. Ціни рахує сервер. */
-export const createOrder = async (payload) => (await impl()).createOrder(payload)
+export async function createOrder(payload) {
+  if (ordersLive) return http.createOrder(payload)
+  const demo = await mock()
+  return catalogFromMocks ? demo.createOrder(payload) : demo.createOrder(payload, findServerProduct)
+}

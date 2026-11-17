@@ -2,6 +2,7 @@
 
 use std::net::SocketAddr;
 use std::ops::RangeInclusive;
+use std::path::PathBuf;
 
 use anyhow::{Context, bail};
 use axum::http::HeaderValue;
@@ -18,6 +19,10 @@ pub struct Config {
     pub trust_proxy: bool,
     /// Адреса сайтов, которым разрешены запросы из браузера.
     pub cors_origins: Vec<String>,
+    /// Адрес сервера, каким его видит браузер покупателя. Из него строятся ссылки на фото.
+    pub public_base_url: String,
+    /// Папка с фото товаров.
+    pub media_dir: PathBuf,
 }
 
 impl Config {
@@ -44,6 +49,10 @@ impl Config {
             refresh_ttl_days: env_number("REFRESH_TOKEN_TTL_DAYS", 60, 1..=365)?,
             trust_proxy: env_flag("TRUST_PROXY")?,
             cors_origins: parse_origins(&std::env::var("CORS_ALLOWED_ORIGINS").unwrap_or_default())?,
+            public_base_url: parse_base_url(
+                &std::env::var("PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".to_owned()),
+            )?,
+            media_dir: std::env::var("MEDIA_DIR").unwrap_or_else(|_| "./media".to_owned()).into(),
         })
     }
 }
@@ -80,6 +89,18 @@ fn parse_flag(raw: &str) -> anyhow::Result<bool> {
         "true" | "1" | "yes" | "on" => Ok(true),
         other => bail!("непонятное значение «{other}»"),
     }
+}
+
+/// Адрес вида `https://api.example.com`, без завершающей косой черты.
+fn parse_base_url(raw: &str) -> anyhow::Result<String> {
+    let url = raw.trim().trim_end_matches('/');
+    let valid = (url.starts_with("https://") || url.starts_with("http://"))
+        && !url.contains([' ', '?', '#'])
+        && url.parse::<HeaderValue>().is_ok();
+    if !valid {
+        bail!("PUBLIC_BASE_URL: «{url}» — не адрес сервера (нужно вида https://api.example.com)");
+    }
+    Ok(url.to_owned())
 }
 
 /// Список адресов через запятую. Каждый должен быть вида `https://example.com`.
@@ -123,6 +144,13 @@ mod tests {
         assert!(parse_origins("").unwrap().is_empty());
         assert!(parse_origins("*").is_err());
         assert!(parse_origins("a.example").is_err());
+    }
+
+    #[test]
+    fn base_url() {
+        assert_eq!(parse_base_url(" https://api.example.com/ ").unwrap(), "https://api.example.com");
+        assert!(parse_base_url("api.example.com").is_err());
+        assert!(parse_base_url("https://a.example/?x=1").is_err());
     }
 
     #[test]
