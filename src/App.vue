@@ -1,62 +1,19 @@
 <script setup>
-import HeroSection from './components/HeroSection.vue'
-import FeaturesSection from './components/FeaturesSection.vue'
-import ContactSection from './components/ContactSection.vue'
-import FooterSection from './components/FooterSection.vue'
+import { RouterView } from 'vue-router'
+import AppHeader from '@/components/layout/AppHeader.vue'
+import FooterSection from '@/components/FooterSection.vue'
 </script>
 
 <template>
-  <main>
-    <HeroSection />
-
-    <div class="section-sep">
-      <div class="sep-line"></div>
-      <div class="sep-diamond"></div>
-      <div class="sep-line"></div>
-    </div>
-
-    <FeaturesSection />
-
-    <div class="section-sep">
-      <div class="sep-line"></div>
-      <div class="sep-diamond"></div>
-      <div class="sep-line"></div>
-    </div>
-
-    <ContactSection />
-
-    <div class="section-sep">
-      <div class="sep-line"></div>
-      <div class="sep-diamond"></div>
-      <div class="sep-line"></div>
-    </div>
-
-    <FooterSection />
+  <a
+    href="#main"
+    class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
+  >
+    Перейти до вмісту
+  </a>
+  <AppHeader />
+  <main id="main" class="min-h-[60vh]">
+    <RouterView />
   </main>
+  <FooterSection />
 </template>
-
-<style>
-.section-sep {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  background-color: var(--c-dark);
-}
-
-.sep-line {
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(to right, transparent, rgba(255, 138, 0, 0.3), transparent);
-}
-
-.sep-diamond {
-  width: 10px;
-  height: 10px;
-  background-color: var(--c-primary);
-  transform: rotate(45deg);
-  margin: 0 1rem;
-  flex-shrink: 0;
-  box-shadow: 0 0 10px rgba(255, 138, 0, 0.6);
-}
-</style>

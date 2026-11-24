@@ -1,71 +1,49 @@
 <script setup>
+import { Phone } from '@lucide/vue'
+import { company } from '@/content/company'
+import { Button } from '@/components/ui/button'
+
+// Путь с учётом адреса публикации: сайт может жить не в корне домена (например, GitHub Pages).
+const heroBackground = `${import.meta.env.BASE_URL}hero_background.png`
 </script>
 
 <template>
-  <section class="hero" id="home">
-    <div class="hero-overlay"></div>
-    <div class="container hero-content">
-      <h1 class="animate-fade-up">Ваш Надійний <br><span class="text-primary">Будівельний Партнер</span></h1>
-      <p class="hero-subtitle animate-fade-up delay-100">Чугуїв • Е-ВІДНОВЛЕННЯ</p>
-      
-      <div class="hero-actions animate-fade-up delay-200">
-        <a href="#contact" class="btn btn-primary">Зв'язатися з нами</a>
-        <a href="#about" class="btn btn-outline">Дізнатися більше</a>
+  <!-- Фон — фото з темно-синьою підкладкою, тому текст білий в обох темах. -->
+  <section
+    id="home"
+    class="relative isolate flex min-h-[calc(100svh-4rem)] items-center bg-[#0b1121] bg-cover bg-center"
+    :style="{ backgroundImage: `url('${heroBackground}')` }"
+  >
+    <div class="absolute inset-0 -z-10 bg-gradient-to-br from-[#0b1121]/95 via-[#0b1121]/80 to-[#151d30]/85" />
+
+    <div class="container-page py-20 text-white">
+      <p class="mb-4 text-sm font-semibold tracking-[0.2em] text-primary uppercase">
+        Чугуїв · Е-Відновлення
+      </p>
+      <h1 class="max-w-3xl text-4xl leading-tight font-bold text-balance sm:text-5xl lg:text-6xl">
+        Ваш надійний <span class="text-primary">будівельний партнер</span>
+      </h1>
+      <p class="mt-6 max-w-xl text-lg text-slate-300">
+        Будівельні матеріали від цементу до покрівлі. Телефонуйте або приходьте —
+        підкажемо, підберемо й порахуємо.
+      </p>
+
+      <div class="mt-10 flex flex-wrap gap-3">
+        <Button size="lg" class="h-12 px-7 text-base" as-child>
+          <a :href="company.phones[0].href">
+            <Phone />
+            {{ company.phones[0].label }}
+          </a>
+        </Button>
+        <Button
+          size="lg"
+          variant="outline"
+          class="h-12 border-white/30 bg-transparent px-7 text-base text-white hover:bg-white/10 hover:text-white dark:border-white/30 dark:bg-transparent dark:hover:bg-white/10"
+          as-child
+        >
+          <a href="#contact">Зв’язатися з нами</a>
+        </Button>
       </div>
     </div>
   </section>
 </template>
-
-<style scoped>
-.hero {
-  position: relative;
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  background-image: url('/hero_background.png');
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  padding-top: var(--header-height);
-}
-
-.hero-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(11, 17, 33, 0.9) 0%,
-    rgba(11, 17, 33, 0.7) 50%,
-    rgba(21, 29, 48, 0.8) 100%
-  );
-  z-index: 1;
-}
-
-.hero-content {
-  position: relative;
-  z-index: 2;
-  text-align: center;
-  max-width: 800px;
-}
-
-h1 {
-  font-size: clamp(2.5rem, 5vw, 4.5rem);
-  margin-bottom: 1.5rem;
-  letter-spacing: -0.02em;
-}
-
-.hero-subtitle {
-  font-size: clamp(1.2rem, 3vw, 1.5rem);
-  color: var(--c-gray);
-  margin-bottom: 2.5rem;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-}
-
-.hero-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-</style>
